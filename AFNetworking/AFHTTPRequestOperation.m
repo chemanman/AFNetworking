@@ -21,6 +21,22 @@
 
 #import "AFHTTPRequestOperation.h"
 
+@implementation MMReactInfo
+
+- (id)init
+{
+    self = [super init];
+    if (self) {
+        // do nothing.
+    }
+    return self;
+}
+
+@end
+
+NSString *const MMNReact = @"MMNReact";
+NSString *const MMKReact = @"MMKReact";
+
 static dispatch_queue_t http_request_operation_processing_queue() {
     static dispatch_queue_t af_http_request_operation_processing_queue;
     static dispatch_once_t onceToken;
@@ -146,6 +162,75 @@ static dispatch_group_t http_request_operation_completion_group() {
         });
     };
 #pragma clang diagnostic pop
+}
+
+- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
+                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
+                              request:(NSURLRequest *)request
+                           parameters:(id)parameters
+{
+    // completionBlock is manually nilled out in AFURLConnectionOperation to break the retain cycle.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-retain-cycles"
+#pragma clang diagnostic ignored "-Wgnu"
+    self.completionBlock = ^{
+        if (self.completionGroup) {
+            dispatch_group_enter(self.completionGroup);
+        }
+        
+        dispatch_async(http_request_operation_processing_queue(), ^{
+            if (self.error) {
+                if (failure) {
+                    dispatch_group_async(self.completionGroup ?: http_request_operation_completion_group(), self.completionQueue ?: dispatch_get_main_queue(), ^{
+                        failure(self, self.error);
+                    });
+                }
+            } else {
+                id responseObject = self.responseObject;
+                if (success) {
+                    dispatch_group_async(self.completionGroup ?: http_request_operation_completion_group(), self.completionQueue ?: dispatch_get_main_queue(), ^{
+                        if ([self needReact:responseObject]) {
+                            MMReactInfo *rInfo = [[MMReactInfo alloc] init];
+                            rInfo.successBlock = success;
+                            rInfo.request = request;
+                            rInfo.parameters = parameters;
+                            rInfo.buttons = [self buttonDic:responseObject];
+                            rInfo.responseObject = self.responseObject;
+                            [[NSNotificationCenter defaultCenter] postNotificationName:MMNReact
+                                                                                object:nil
+                                                                              userInfo:@{MMKReact : rInfo}];
+                        } else {
+                            success(self, responseObject);
+                        }
+                    });
+                }
+            }
+            
+            if (self.completionGroup) {
+                dispatch_group_leave(self.completionGroup);
+            }
+        });
+    };
+#pragma clang diagnostic pop
+}
+
+- (BOOL)needReact:(id)responseObject
+{
+    if ([responseObject isKindOfClass:[NSDictionary class]]) {
+        NSDictionary *dataDic = [responseObject objectForKey:@"data"];
+        NSDictionary *buttonDic = [dataDic objectForKey:@"_button"];
+        if (buttonDic.count > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+- (NSDictionary *)buttonDic:(id)responseObject
+{
+    NSDictionary *dataDic = [responseObject objectForKey:@"data"];
+    NSDictionary *buttonDic = [dataDic objectForKey:@"_button"];
+    return buttonDic;
 }
 
 #pragma mark - AFURLRequestOperation

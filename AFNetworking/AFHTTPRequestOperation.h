@@ -21,8 +21,22 @@
 
 #import <Foundation/Foundation.h>
 #import "AFURLConnectionOperation.h"
+@class AFHTTPRequestOperation;
 
 NS_ASSUME_NONNULL_BEGIN
+
+extern NSString *const MMNReact;
+extern NSString *const MMKReact;
+
+@interface MMReactInfo : NSObject
+
+@property (nonatomic, strong) NSURLRequest *request;
+@property (nonatomic, strong) NSDictionary *parameters;
+@property (nonatomic, strong) NSDictionary *buttons;    // 二次交互button
+@property (nonatomic, copy) void (^successBlock)(AFHTTPRequestOperation *operation, id responseObject);
+@property (nonatomic, strong) id responseObject;
+
+@end
 
 /**
  `AFHTTPRequestOperation` is a subclass of `AFURLConnectionOperation` for requests using the HTTP or HTTPS protocols. It encapsulates the concept of acceptable status codes and content types, which determine the success or failure of a request.
@@ -64,6 +78,11 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (void)setCompletionBlockWithSuccess:(nullable void (^)(AFHTTPRequestOperation *operation, id responseObject))success
                               failure:(nullable void (^)(AFHTTPRequestOperation *operation, NSError *error))failure;
+
+- (void)setCompletionBlockWithSuccess:(void (^)(AFHTTPRequestOperation *operation, id responseObject))success
+                              failure:(void (^)(AFHTTPRequestOperation *operation, NSError *error))failure
+                              request:(NSURLRequest *)request
+                           parameters:(id)parameters;
 
 @end
 
